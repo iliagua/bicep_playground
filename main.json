@@ -4,35 +4,107 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.21.1.54444",
-      "templateHash": "5475367230270853633"
+      "version": "0.22.6.54827",
+      "templateHash": "14684609404048358789"
     }
   },
   "parameters": {
+    "envName": {
+      "type": "string",
+      "defaultValue": "ilyatest",
+      "metadata": {
+        "description": "suffix to use for names in different environments"
+      }
+    },
     "location": {
       "type": "string",
-      "defaultValue": "[resourceGroup().location]"
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "defaultValue": "[format('blaqd-api-plan-{0}', parameters('envName'))]"
+    },
+    "appServiceScuName": {
+      "type": "string",
+      "defaultValue": "B1"
+    },
+    "appServiceScuTier": {
+      "type": "string",
+      "defaultValue": "Basic"
+    },
+    "webAppName": {
+      "type": "string",
+      "defaultValue": "[format('blaqdapiwebapp{0}', parameters('envName'))]"
+    },
+    "registryName": {
+      "type": "string",
+      "defaultValue": "[format('blaqdacr{0}', parameters('envName'))]"
+    },
+    "imageName": {
+      "type": "string",
+      "defaultValue": "blaqdservices:latest"
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "environment": "[parameters('envName')]",
+        "dveleopedBy": "ilya",
+        "repo": "tbd",
+        "project": "blaqd"
+      },
+      "metadata": {
+        "description": "Tags"
+      }
     }
   },
   "resources": [
     {
-      "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2023-01-01",
-      "name": "[format('ilya{0}stg', uniqueString(resourceGroup().id))]",
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2020-12-01",
+      "name": "[parameters('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "kind": "linux",
+      "properties": {
+        "reserved": true
+      },
+      "sku": {
+        "name": "[parameters('appServiceScuName')]",
+        "tier": "[parameters('appServiceScuTier')]"
+      }
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries",
+      "apiVersion": "2020-11-01-preview",
+      "name": "[parameters('registryName')]",
       "location": "[parameters('location')]",
       "sku": {
-        "name": "Standard_LRS"
+        "name": "Standard"
       },
-      "kind": "BlobStorage",
       "properties": {
-        "accessTier": "Hot"
+        "adminUserEnabled": false
       }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-01-01",
+      "name": "[parameters('webAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "siteConfig": {
+          "appSettings": [],
+          "acrUseManagedIdentityCreds": true,
+          "linuxFxVersion": "[format('DOCKER|{0}/{1}', reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('registryName')), '2020-11-01-preview').loginServer, parameters('imageName'))]"
+        },
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+      },
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registryName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+      ]
     }
-  ],
-  "outputs": {
-    "blobUri": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', format('ilya{0}stg', uniqueString(resourceGroup().id))), '2023-01-01').primaryEndpoints.blob]"
-    }
-  }
+  ]
 }
