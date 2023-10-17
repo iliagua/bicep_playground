@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.22.6.54827",
-      "templateHash": "14684609404048358789"
+      "templateHash": "17106491533258145513"
     }
   },
   "parameters": {
@@ -25,13 +25,13 @@
     },
     "appServicePlanName": {
       "type": "string",
-      "defaultValue": "[format('blaqd-api-plan-{0}', parameters('envName'))]"
+      "defaultValue": "[format('blaqd-asp-{0}', parameters('envName'))]"
     },
-    "appServiceScuName": {
+    "appServiceSkuName": {
       "type": "string",
       "defaultValue": "B1"
     },
-    "appServiceScuTier": {
+    "appServiceSkuTier": {
       "type": "string",
       "defaultValue": "Basic"
     },
@@ -46,6 +46,42 @@
     "imageName": {
       "type": "string",
       "defaultValue": "blaqdservices:latest"
+    },
+    "appStorageAccountName": {
+      "type": "string",
+      "defaultValue": "[format('blaqdappstorage{0}', parameters('envName'))]"
+    },
+    "appStorageAccountSkuName": {
+      "type": "string",
+      "defaultValue": "Standard_RAGRS"
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "[format('blaqdfuncapp{0}', parameters('envName'))]"
+    },
+    "functionAppNameSkuName": {
+      "type": "string",
+      "defaultValue": "Y1"
+    },
+    "functionAppNameSkuTier": {
+      "type": "string",
+      "defaultValue": "Dynamic"
+    },
+    "functionAppServicePlanName": {
+      "type": "string",
+      "defaultValue": "[format('blaqd-func-asp-{0}', parameters('envName'))]"
+    },
+    "functionStorageAccountName": {
+      "type": "string",
+      "defaultValue": "[format('blaqdfuncstorage{0}', parameters('envName'))]"
+    },
+    "functionStorageAccountSkuName": {
+      "type": "string",
+      "defaultValue": "Standard_LRS"
+    },
+    "applicationInsightsName": {
+      "type": "string",
+      "defaultValue": "[format('blaqdappinsights{0}', parameters('envName'))]"
     },
     "tags": {
       "type": "object",
@@ -71,8 +107,8 @@
         "reserved": true
       },
       "sku": {
-        "name": "[parameters('appServiceScuName')]",
-        "tier": "[parameters('appServiceScuTier')]"
+        "name": "[parameters('appServiceSkuName')]",
+        "tier": "[parameters('appServiceSkuTier')]"
       }
     },
     {
@@ -100,11 +136,115 @@
         },
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
       },
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "tags": "[parameters('tags')]",
       "dependsOn": [
         "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registryName'))]",
         "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
       ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[parameters('appStorageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('appStorageAccountSkuName')]"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "kind": "StorageV2"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', parameters('appStorageAccountName'))]",
+      "name": "[guid(resourceGroup().id, resourceId('Microsoft.Web/sites', parameters('webAppName')), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '17d1049b-9a84-46fb-8f53-869881c3d3ab'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '17d1049b-9a84-46fb-8f53-869881c3d3ab')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('webAppName')), '2021-01-01', 'full').identity.principalId]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('appStorageAccountName'))]",
+        "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2020-12-01",
+      "name": "[parameters('functionAppServicePlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('functionAppNameSkuName')]",
+        "tier": "[parameters('functionAppNameSkuTier')]"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[parameters('functionStorageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('functionStorageAccountSkuName')]"
+      },
+      "kind": "StorageV2"
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-02-01",
+      "name": "[parameters('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('functionAppServicePlanName'))]",
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "node18"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('functionStorageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('functionStorageAccountName')), '2021-04-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('functionStorageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('functionStorageAccountName')), '2021-04-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(parameters('functionAppName'))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').InstrumentationKey]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', parameters('functionAppServicePlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('functionStorageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[parameters('applicationInsightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "Request_Source": "rest"
+      }
     }
   ]
 }
