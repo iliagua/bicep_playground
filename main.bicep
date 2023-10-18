@@ -1,6 +1,6 @@
 
 @description('suffix to use for names in different environments')
-param envName string = 'ilyatest'
+param envName string = 'in'
 
 @description('Location for all resources.')
 param location string = resourceGroup().location
@@ -37,6 +37,8 @@ param tags object = {
   project: 'blaqd'
 }
 
+
+
 // #section API
 resource appServicePlan 'Microsoft.Web/serverfarms@2020-12-01' = {
   name: appServicePlanName
@@ -44,12 +46,51 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2020-12-01' = {
   kind: 'linux'
   properties: {
     reserved: true
+    perSiteScaling: false
   }
   sku: {
     name: appServiceSkuName
     tier: appServiceSkuTier
   }
 }
+
+// TODO: replace 10.0
+// network block
+resource vnet 'Microsoft.Network/virtualNetworks@2021-02-01' = {
+  name: '${projectName}vnet${envName}'
+  location: location
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        '10.0.0.0/16'
+      ]
+    }
+    subnets: [
+      {
+        name: 'default'
+        properties: {
+          addressPrefix: '10.0.0.0/24'
+        }
+      }
+      {
+        name: 'webapp'
+        properties: {
+          addressPrefix: '10.0.1.0/24'
+          delegations: [
+            {
+              name: 'Microsoft.Web/serverFarms'
+              properties: {
+                serviceName: 'Microsoft.Web/serverFarms'
+              }
+            }
+          ]
+        }
+      }
+
+    ]
+  }
+}
+
 
 // containerRegistry
 resource acr 'Microsoft.ContainerRegistry/registries@2020-11-01-preview' = {
@@ -74,6 +115,7 @@ resource webApp 'Microsoft.Web/sites@2021-01-01' = {
       linuxFxVersion: 'DOCKER|${acr.properties.loginServer}/${imageName}'
     }
     serverFarmId: appServicePlan.id
+    virtualNetworkSubnetId: vnet.properties.subnets[1].id
   }
   identity: {
     type: 'SystemAssigned'

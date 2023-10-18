@@ -5,13 +5,13 @@
     "_generator": {
       "name": "bicep",
       "version": "0.22.6.54827",
-      "templateHash": "14067759706698762774"
+      "templateHash": "6841527118350019950"
     }
   },
   "parameters": {
     "envName": {
       "type": "string",
-      "defaultValue": "ilyatest",
+      "defaultValue": "in",
       "metadata": {
         "description": "suffix to use for names in different environments"
       }
@@ -62,6 +62,10 @@
       "metadata": {
         "description": "Tags"
       }
+    },
+    "notificationHubSkuName": {
+      "type": "string",
+      "defaultValue": "Free"
     }
   },
   "variables": {
@@ -87,11 +91,47 @@
       "location": "[parameters('location')]",
       "kind": "linux",
       "properties": {
-        "reserved": true
+        "reserved": true,
+        "perSiteScaling": false
       },
       "sku": {
         "name": "[parameters('appServiceSkuName')]",
         "tier": "[parameters('appServiceSkuTier')]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2021-02-01",
+      "name": "[format('{0}vnet{1}', variables('projectName'), parameters('envName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "default",
+            "properties": {
+              "addressPrefix": "10.0.0.0/24"
+            }
+          },
+          {
+            "name": "webapp",
+            "properties": {
+              "addressPrefix": "10.0.1.0/24",
+              "delegations": [
+                {
+                  "name": "Microsoft.Web/serverFarms",
+                  "properties": {
+                    "serviceName": "Microsoft.Web/serverFarms"
+                  }
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -117,7 +157,8 @@
           "acrUseManagedIdentityCreds": true,
           "linuxFxVersion": "[format('DOCKER|{0}/{1}', reference(resourceId('Microsoft.ContainerRegistry/registries', variables('registryName')), '2020-11-01-preview').loginServer, parameters('imageName'))]"
         },
-        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "virtualNetworkSubnetId": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}vnet{1}', variables('projectName'), parameters('envName'))), '2021-02-01').subnets[1].id]"
       },
       "identity": {
         "type": "SystemAssigned"
@@ -125,7 +166,8 @@
       "tags": "[parameters('tags')]",
       "dependsOn": [
         "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]",
-        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}vnet{1}', variables('projectName'), parameters('envName')))]"
       ]
     },
     {
@@ -253,7 +295,7 @@
       "name": "[variables('notificationNamespaceName')]",
       "location": "[parameters('location')]",
       "sku": {
-        "name": "Free"
+        "name": "[parameters('notificationHubSkuName')]"
       }
     },
     {
