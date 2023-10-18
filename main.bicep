@@ -11,7 +11,7 @@ param appServiceSkuName string = 'B1'
 param appServiceSkuTier string = 'Basic'
 param webAppName string = 'blaqdapiwebapp${envName}'
 param registryName string = 'blaqdacr${envName}'
-// param webhookName string = '${webAppName}webhook${envName}'
+param webhookName string = '${webAppName}webhook${envName}'
 param imageName string = 'blaqdservices:latest'
 param appStorageAccountName string = 'blaqdappstorage${envName}'
 param appStorageAccountSkuName string = 'Standard_RAGRS'
@@ -80,22 +80,27 @@ resource webApp 'Microsoft.Web/sites@2021-01-01' = {
   tags: tags
 }
 
-// why do i need that?
+// IDK why it's working - https://github.com/Azure/bicep/discussions/3352
+resource publishingcreds 'Microsoft.Web/sites/config@2021-01-01' existing = {
+  name: '${webAppName}/publishingcredentials'
+}
+var creds = list(publishingcreds.id, publishingcreds.apiVersion).properties.scmUri
+
 // webhook
-// resource symbolicname 'Microsoft.ContainerRegistry/registries/webhooks@2023-01-01-preview' = {
-//   name:webhookName
-//   location: location
-//   tags: tags
-//   parent: acr
-//   properties: {
-//     actions: [
-//       'push'
-//     ]
-//     status: 'enabled'
-//     scope: imageName
-//     serviceUri: webApp.properties.defaultHostName
-//   }
-// }
+resource symbolicname 'Microsoft.ContainerRegistry/registries/webhooks@2023-01-01-preview' = {
+  name:webhookName
+  location: location
+  tags: tags
+  parent: acr
+  properties: {
+    actions: [
+      'push'
+    ]
+    status: 'enabled'
+    scope: imageName
+    serviceUri: '${creds}/api/registry/webhook'
+  }
+}
 
 resource appStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
   name: appStorageAccountName

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.22.6.54827",
-      "templateHash": "17106491533258145513"
+      "templateHash": "18039947759446255614"
     }
   },
   "parameters": {
@@ -42,6 +42,10 @@
     "registryName": {
       "type": "string",
       "defaultValue": "[format('blaqdacr{0}', parameters('envName'))]"
+    },
+    "webhookName": {
+      "type": "string",
+      "defaultValue": "[format('{0}webhook{1}', parameters('webAppName'), parameters('envName'))]"
     },
     "imageName": {
       "type": "string",
@@ -143,6 +147,24 @@
       "dependsOn": [
         "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registryName'))]",
         "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries/webhooks",
+      "apiVersion": "2023-01-01-preview",
+      "name": "[format('{0}/{1}', parameters('registryName'), parameters('webhookName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "actions": [
+          "push"
+        ],
+        "status": "enabled",
+        "scope": "[parameters('imageName')]",
+        "serviceUri": "[format('{0}/api/registry/webhook', list(resourceId('Microsoft.Web/sites/config', split(format('{0}/publishingcredentials', parameters('webAppName')), '/')[0], split(format('{0}/publishingcredentials', parameters('webAppName')), '/')[1]), '2021-01-01').properties.scmUri)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registryName'))]"
       ]
     },
     {
