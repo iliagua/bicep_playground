@@ -198,17 +198,18 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 // notification hub
-@description('The name of the Notification Hubs namespace.')
 var notificationNamespaceName = 'ntfns-${projectName}-${envName}'
 var clientName = 'ntf-${projectName}-client-${envName}'
 var driverName = 'ntf-${projectName}-driver-${envName}'
+
+param notificationHubSkuName string = 'Free'
 
 
 resource notificationNamespace 'Microsoft.NotificationHubs/namespaces@2017-04-01' = {
   name: notificationNamespaceName
   location: location
   sku: {
-    name: 'Free'
+    name: notificationHubSkuName
   }
 }
 
