@@ -4,28 +4,29 @@ param envName string = 'ilyatest'
 
 @description('Location for all resources.')
 param location string = resourceGroup().location
+var projectName = 'blaqd'
+var appServicePlanName = '${projectName}-asp-${envName}'
+var webAppName = '${projectName}apiwebapp${envName}'
+var webhookName = '${webAppName}webhook${envName}'
+var registryName = '${projectName}acr${envName}'
+var appStorageAccountName = '${projectName}appstorage${envName}'
 
-// all for app service plane
-param appServicePlanName string = 'blaqd-asp-${envName}'
 param appServiceSkuName string = 'B1'
 param appServiceSkuTier string = 'Basic'
-param webAppName string = 'blaqdapiwebapp${envName}'
-param registryName string = 'blaqdacr${envName}'
-param webhookName string = '${webAppName}webhook${envName}'
 param imageName string = 'blaqdservices:latest'
-param appStorageAccountName string = 'blaqdappstorage${envName}'
 param appStorageAccountSkuName string = 'Standard_RAGRS'
 
 
 // #section AD -> function -> storage
 // https://learn.microsoft.com/en-us/azure/azure-functions/functions-create-first-function-bicep?tabs=CLI
-param functionAppName string = 'blaqdfuncapp${envName}'
+var functionAppName = '${projectName}funcapp${envName}'
+var functionAppServicePlanName = '${projectName}-func-asp-${envName}'
+var functionStorageAccountName = '${projectName}funcstorage${envName}'
+var applicationInsightsName = '${projectName}appinsights${envName}'
+
+param functionStorageAccountSkuName string = 'Standard_LRS'
 param functionAppNameSkuName string = 'Y1'
 param functionAppNameSkuTier string = 'Dynamic'
-param functionAppServicePlanName string = 'blaqd-func-asp-${envName}'
-param functionStorageAccountName string = 'blaqdfuncstorage${envName}'
-param functionStorageAccountSkuName string = 'Standard_LRS'
-param applicationInsightsName string = 'blaqdappinsights${envName}'
 
 
 @description('Tags')
@@ -195,3 +196,36 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
     Request_Source: 'rest'
   }
 }
+
+// notification hub
+@description('The name of the Notification Hubs namespace.')
+var notificationNamespaceName = 'ntfns-${projectName}-${envName}'
+var clientName = 'ntf-${projectName}-client-${envName}'
+var driverName = 'ntf-${projectName}-driver-${envName}'
+
+
+resource notificationNamespace 'Microsoft.NotificationHubs/namespaces@2017-04-01' = {
+  name: notificationNamespaceName
+  location: location
+  sku: {
+    name: 'Free'
+  }
+}
+
+resource notificationClientHub 'Microsoft.NotificationHubs/namespaces/notificationHubs@2017-04-01' = {
+  name: clientName
+  location: location
+  parent: notificationNamespace
+  properties: {
+  }
+}
+
+resource notificationDriverHub 'Microsoft.NotificationHubs/namespaces/notificationHubs@2017-04-01' = {
+  name: driverName
+  location: location
+  parent: notificationNamespace
+  properties: {
+  }
+}
+
+
