@@ -5,13 +5,13 @@
     "_generator": {
       "name": "bicep",
       "version": "0.22.6.54827",
-      "templateHash": "6841527118350019950"
+      "templateHash": "11067167051990438173"
     }
   },
   "parameters": {
     "envName": {
       "type": "string",
-      "defaultValue": "in",
+      "defaultValue": "nef",
       "metadata": {
         "description": "suffix to use for names in different environments"
       }
@@ -22,18 +22,6 @@
       "metadata": {
         "description": "Location for all resources."
       }
-    },
-    "appServiceSkuName": {
-      "type": "string",
-      "defaultValue": "B1"
-    },
-    "appServiceSkuTier": {
-      "type": "string",
-      "defaultValue": "Basic"
-    },
-    "imageName": {
-      "type": "string",
-      "defaultValue": "blaqdservices:latest"
     },
     "appStorageAccountSkuName": {
       "type": "string",
@@ -56,267 +44,40 @@
       "defaultValue": {
         "environment": "[parameters('envName')]",
         "dveleopedBy": "ilya",
-        "repo": "tbd",
-        "project": "blaqd"
+        "project": "playground"
       },
       "metadata": {
         "description": "Tags"
       }
-    },
-    "notificationHubSkuName": {
-      "type": "string",
-      "defaultValue": "Free"
     }
   },
   "variables": {
-    "projectName": "blaqd",
+    "projectName": "ilyatest",
     "appServicePlanName": "[format('{0}-asp-{1}', variables('projectName'), parameters('envName'))]",
     "webAppName": "[format('{0}apiwebapp{1}', variables('projectName'), parameters('envName'))]",
     "webhookName": "[format('{0}webhook{1}', variables('webAppName'), parameters('envName'))]",
     "registryName": "[format('{0}acr{1}', variables('projectName'), parameters('envName'))]",
     "appStorageAccountName": "[format('{0}appstorage{1}', variables('projectName'), parameters('envName'))]",
+    "appServiceSkuName": "B1",
+    "appServiceSkuTier": "Basic",
+    "imageName": "[format('{0}:latest', variables('projectName'))]",
     "functionAppName": "[format('{0}funcapp{1}', variables('projectName'), parameters('envName'))]",
     "functionAppServicePlanName": "[format('{0}-func-asp-{1}', variables('projectName'), parameters('envName'))]",
     "functionStorageAccountName": "[format('{0}funcstorage{1}', variables('projectName'), parameters('envName'))]",
-    "applicationInsightsName": "[format('{0}appinsights{1}', variables('projectName'), parameters('envName'))]",
-    "notificationNamespaceName": "[format('ntfns-{0}-{1}', variables('projectName'), parameters('envName'))]",
-    "clientName": "[format('ntf-{0}-client-{1}', variables('projectName'), parameters('envName'))]",
-    "driverName": "[format('ntf-{0}-driver-{1}', variables('projectName'), parameters('envName'))]"
+    "applicationInsightsName": "[format('{0}appinsights{1}', variables('projectName'), parameters('envName'))]"
   },
   "resources": [
     {
-      "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2020-12-01",
-      "name": "[variables('appServicePlanName')]",
-      "location": "[parameters('location')]",
-      "kind": "linux",
-      "properties": {
-        "reserved": true,
-        "perSiteScaling": false
-      },
-      "sku": {
-        "name": "[parameters('appServiceSkuName')]",
-        "tier": "[parameters('appServiceSkuTier')]"
-      }
-    },
-    {
-      "type": "Microsoft.Network/virtualNetworks",
-      "apiVersion": "2021-02-01",
-      "name": "[format('{0}vnet{1}', variables('projectName'), parameters('envName'))]",
-      "location": "[parameters('location')]",
-      "properties": {
-        "addressSpace": {
-          "addressPrefixes": [
-            "10.0.0.0/16"
-          ]
-        },
-        "subnets": [
-          {
-            "name": "default",
-            "properties": {
-              "addressPrefix": "10.0.0.0/24"
-            }
-          },
-          {
-            "name": "webapp",
-            "properties": {
-              "addressPrefix": "10.0.1.0/24",
-              "delegations": [
-                {
-                  "name": "Microsoft.Web/serverFarms",
-                  "properties": {
-                    "serviceName": "Microsoft.Web/serverFarms"
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
       "type": "Microsoft.ContainerRegistry/registries",
       "apiVersion": "2020-11-01-preview",
-      "name": "[variables('registryName')]",
+      "name": "[format('{0}{1}', variables('projectName'), parameters('envName'))]",
       "location": "[parameters('location')]",
       "sku": {
         "name": "Standard"
       },
       "properties": {
-        "adminUserEnabled": false
+        "adminUserEnabled": true
       }
-    },
-    {
-      "type": "Microsoft.Web/sites",
-      "apiVersion": "2021-01-01",
-      "name": "[variables('webAppName')]",
-      "location": "[parameters('location')]",
-      "properties": {
-        "siteConfig": {
-          "appSettings": [],
-          "acrUseManagedIdentityCreds": true,
-          "linuxFxVersion": "[format('DOCKER|{0}/{1}', reference(resourceId('Microsoft.ContainerRegistry/registries', variables('registryName')), '2020-11-01-preview').loginServer, parameters('imageName'))]"
-        },
-        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
-        "virtualNetworkSubnetId": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}vnet{1}', variables('projectName'), parameters('envName'))), '2021-02-01').subnets[1].id]"
-      },
-      "identity": {
-        "type": "SystemAssigned"
-      },
-      "tags": "[parameters('tags')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]",
-        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
-        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}vnet{1}', variables('projectName'), parameters('envName')))]"
-      ]
-    },
-    {
-      "type": "Microsoft.ContainerRegistry/registries/webhooks",
-      "apiVersion": "2023-01-01-preview",
-      "name": "[format('{0}/{1}', variables('registryName'), variables('webhookName'))]",
-      "location": "[parameters('location')]",
-      "tags": "[parameters('tags')]",
-      "properties": {
-        "actions": [
-          "push"
-        ],
-        "status": "enabled",
-        "scope": "[parameters('imageName')]",
-        "serviceUri": "[format('{0}/api/registry/webhook', list(resourceId('Microsoft.Web/sites/config', split(format('{0}/publishingcredentials', variables('webAppName')), '/')[0], split(format('{0}/publishingcredentials', variables('webAppName')), '/')[1]), '2021-01-01').properties.scmUri)]"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2021-04-01",
-      "name": "[variables('appStorageAccountName')]",
-      "location": "[parameters('location')]",
-      "sku": {
-        "name": "[parameters('appStorageAccountSkuName')]"
-      },
-      "identity": {
-        "type": "SystemAssigned"
-      },
-      "kind": "StorageV2"
-    },
-    {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('appStorageAccountName'))]",
-      "name": "[guid(resourceGroup().id, resourceId('Microsoft.Web/sites', variables('webAppName')), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '17d1049b-9a84-46fb-8f53-869881c3d3ab'))]",
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '17d1049b-9a84-46fb-8f53-869881c3d3ab')]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('webAppName')), '2021-01-01', 'full').identity.principalId]"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', variables('appStorageAccountName'))]",
-        "[resourceId('Microsoft.Web/sites', variables('webAppName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2020-12-01",
-      "name": "[variables('functionAppServicePlanName')]",
-      "location": "[parameters('location')]",
-      "sku": {
-        "name": "[parameters('functionAppNameSkuName')]",
-        "tier": "[parameters('functionAppNameSkuTier')]"
-      }
-    },
-    {
-      "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2021-04-01",
-      "name": "[variables('functionStorageAccountName')]",
-      "location": "[parameters('location')]",
-      "sku": {
-        "name": "[parameters('functionStorageAccountSkuName')]"
-      },
-      "kind": "StorageV2"
-    },
-    {
-      "type": "Microsoft.Web/sites",
-      "apiVersion": "2021-02-01",
-      "name": "[variables('functionAppName')]",
-      "location": "[parameters('location')]",
-      "kind": "functionapp",
-      "properties": {
-        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('functionAppServicePlanName'))]",
-        "siteConfig": {
-          "appSettings": [
-            {
-              "name": "FUNCTIONS_WORKER_RUNTIME",
-              "value": "node18"
-            },
-            {
-              "name": "AzureWebJobsStorage",
-              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('functionStorageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('functionStorageAccountName')), '2021-04-01').keys[0].value)]"
-            },
-            {
-              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('functionStorageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('functionStorageAccountName')), '2021-04-01').keys[0].value)]"
-            },
-            {
-              "name": "WEBSITE_CONTENTSHARE",
-              "value": "[toLower(variables('functionAppName'))]"
-            },
-            {
-              "name": "FUNCTIONS_EXTENSION_VERSION",
-              "value": "~4"
-            },
-            {
-              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-              "value": "[reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName')), '2020-02-02').InstrumentationKey]"
-            }
-          ]
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
-        "[resourceId('Microsoft.Web/serverfarms', variables('functionAppServicePlanName'))]",
-        "[resourceId('Microsoft.Storage/storageAccounts', variables('functionStorageAccountName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.Insights/components",
-      "apiVersion": "2020-02-02",
-      "name": "[variables('applicationInsightsName')]",
-      "location": "[parameters('location')]",
-      "kind": "web",
-      "properties": {
-        "Application_Type": "web",
-        "Request_Source": "rest"
-      }
-    },
-    {
-      "type": "Microsoft.NotificationHubs/namespaces",
-      "apiVersion": "2017-04-01",
-      "name": "[variables('notificationNamespaceName')]",
-      "location": "[parameters('location')]",
-      "sku": {
-        "name": "[parameters('notificationHubSkuName')]"
-      }
-    },
-    {
-      "type": "Microsoft.NotificationHubs/namespaces/notificationHubs",
-      "apiVersion": "2017-04-01",
-      "name": "[format('{0}/{1}', variables('notificationNamespaceName'), variables('clientName'))]",
-      "location": "[parameters('location')]",
-      "properties": {},
-      "dependsOn": [
-        "[resourceId('Microsoft.NotificationHubs/namespaces', variables('notificationNamespaceName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.NotificationHubs/namespaces/notificationHubs",
-      "apiVersion": "2017-04-01",
-      "name": "[format('{0}/{1}', variables('notificationNamespaceName'), variables('driverName'))]",
-      "location": "[parameters('location')]",
-      "properties": {},
-      "dependsOn": [
-        "[resourceId('Microsoft.NotificationHubs/namespaces', variables('notificationNamespaceName'))]"
-      ]
     }
   ]
 }

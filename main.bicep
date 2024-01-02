@@ -1,19 +1,21 @@
 
 @description('suffix to use for names in different environments')
-param envName string = 'in'
+param envName string = 'nef'
 
 @description('Location for all resources.')
 param location string = resourceGroup().location
-var projectName = 'blaqd'
+
+var projectName = 'ilyatest'
+
 var appServicePlanName = '${projectName}-asp-${envName}'
 var webAppName = '${projectName}apiwebapp${envName}'
 var webhookName = '${webAppName}webhook${envName}'
 var registryName = '${projectName}acr${envName}'
 var appStorageAccountName = '${projectName}appstorage${envName}'
 
-param appServiceSkuName string = 'B1'
-param appServiceSkuTier string = 'Basic'
-param imageName string = 'blaqdservices:latest'
+var appServiceSkuName = 'B1'
+var appServiceSkuTier = 'Basic'
+var imageName = '${projectName}:latest'
 param appStorageAccountSkuName string = 'Standard_RAGRS'
 
 
@@ -33,242 +35,130 @@ param functionAppNameSkuTier string = 'Dynamic'
 param tags object = {
   environment: envName
   dveleopedBy: 'ilya'
-  repo: 'tbd'
-  project: 'blaqd'
+  project: 'playground'
 }
 
 
 
 // #section API
-resource appServicePlan 'Microsoft.Web/serverfarms@2020-12-01' = {
-  name: appServicePlanName
-  location: location
-  kind: 'linux'
-  properties: {
-    reserved: true
-    perSiteScaling: false
-  }
-  sku: {
-    name: appServiceSkuName
-    tier: appServiceSkuTier
-  }
-}
+// resource appServicePlan 'Microsoft.Web/serverfarms@2020-12-01' = {
+//   name: appServicePlanName
+//   location: location
+//   kind: 'linux'
+//   properties: {
+//     reserved: true
+//     perSiteScaling: false
+//   }
+//   sku: {
+//     name: appServiceSkuName
+//     tier: appServiceSkuTier
+//   }
+// }
 
-// TODO: replace 10.0
-// network block
-resource vnet 'Microsoft.Network/virtualNetworks@2021-02-01' = {
-  name: '${projectName}vnet${envName}'
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: [
-        '10.0.0.0/16'
-      ]
-    }
-    subnets: [
-      {
-        name: 'default'
-        properties: {
-          addressPrefix: '10.0.0.0/24'
-        }
-      }
-      {
-        name: 'webapp'
-        properties: {
-          addressPrefix: '10.0.1.0/24'
-          delegations: [
-            {
-              name: 'Microsoft.Web/serverFarms'
-              properties: {
-                serviceName: 'Microsoft.Web/serverFarms'
-              }
-            }
-          ]
-        }
-      }
+// resource vnet 'Microsoft.Network/virtualNetworks@2021-02-01' = {
+//   name: 'vnet-${projectName}-${envName}'
+//   location: location
+//   properties: {
+//     addressSpace: {
+//       addressPrefixes: [
+//         '10.6.0.0/16'
+//       ]
+//     }
+//     subnets: [
+//       {
+//         name: 'apps'
+//         properties: {
+//           addressPrefix: '10.6.0.0/24'
+//           delegations: [
+//             {
+//               name: 'Microsoft.Web/serverFarms'
+//               properties: {
+//                 serviceName: 'Microsoft.Web/serverFarms'
+//               }
+//             }
+//           ]
+//         }
+//       }
+//       {
+//         name: 'privatelink'
+//         properties: {
+//           addressPrefix: '10.6.1.0/24'
+//         }
+//       }
+//       {
+//         name: 'functions'
+//         properties: {
+//           addressPrefix: '10.6.2.0/24'
+//           delegations: [
+//             {
+//               name: 'Microsoft.Web/serverFarms'
+//               properties: {
+//                 serviceName: 'Microsoft.Web/serverFarms'
+//               }
+//             }
+//           ]
+//         }
+//       }
+//     ]
+//   }
+//   resource functionsSubnet 'subnets' existing = {
+//     name: 'functions'
+//   }
+// }
 
-    ]
-  }
-}
 
-
-// containerRegistry
+// Create container registry for API
 resource acr 'Microsoft.ContainerRegistry/registries@2020-11-01-preview' = {
-  name: registryName
+  name: '${projectName}${envName}'
   location: location
   sku: {
     name: 'Standard'
   }
   properties: {
-    adminUserEnabled: false
+    adminUserEnabled: true
   }
 }
 
 // container reference "value": "DOCKER|blaqddev.azurecr.io/blaqdservices:latest"
-resource webApp 'Microsoft.Web/sites@2021-01-01' = {
-  name: webAppName
-  location: location
-  properties: {
-    siteConfig: {
-      appSettings: []
-      acrUseManagedIdentityCreds: true
-      linuxFxVersion: 'DOCKER|${acr.properties.loginServer}/${imageName}'
-    }
-    serverFarmId: appServicePlan.id
-    virtualNetworkSubnetId: vnet.properties.subnets[1].id
-  }
-  identity: {
-    type: 'SystemAssigned'
-  }
-  tags: tags
-}
+// resource webApp 'Microsoft.Web/sites@2021-01-01' = {
+//   name: webAppName
+//   location: location
+//   properties: {
+//     siteConfig: {
+//       appSettings: []
+//       acrUseManagedIdentityCreds: true
+//       linuxFxVersion: 'DOCKER|${acr.properties.loginServer}/${imageName}'
+//     }
+//     serverFarmId: appServicePlan.id
+//     virtualNetworkSubnetId: vnet.properties.subnets[0].id
+//     httpsOnly: true
+//   }
+//   identity: {
+//     type: 'SystemAssigned'
+//   }
+//   tags: tags
+// }
 
-// IDK why it's working - https://github.com/Azure/bicep/discussions/3352
-resource publishingcreds 'Microsoft.Web/sites/config@2021-01-01' existing = {
-  name: '${webAppName}/publishingcredentials'
-}
-var creds = list(publishingcreds.id, publishingcreds.apiVersion).properties.scmUri
+// // IDK why it's working - https://github.com/Azure/bicep/discussions/3352
+// resource publishingcreds 'Microsoft.Web/sites/config@2021-01-01' existing = {
+//   name: '${webAppName}/publishingcredentials'
+// }
+// var creds = list(publishingcreds.id, publishingcreds.apiVersion).properties.scmUri
 
-// webhook
-resource symbolicname 'Microsoft.ContainerRegistry/registries/webhooks@2023-01-01-preview' = {
-  name:webhookName
-  location: location
-  tags: tags
-  parent: acr
-  properties: {
-    actions: [
-      'push'
-    ]
-    status: 'enabled'
-    scope: imageName
-    serviceUri: '${creds}/api/registry/webhook'
-  }
-}
-
-resource appStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
-  name: appStorageAccountName
-  location: location
-  sku: {
-    name: appStorageAccountSkuName
-  }
-  identity: {
-    type: 'SystemAssigned'
-  }
-  kind: 'StorageV2'
-}
-
-resource storageBlobDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  scope: subscription()
-  name: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
-}
-
-resource blobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, webApp.id, storageBlobDataContributorRoleDefinition.id)
-  scope: appStorageAccount
-  properties: {
-    roleDefinitionId: storageBlobDataContributorRoleDefinition.id
-    principalId: webApp.identity.principalId
-  }
-}
-// #endsection API^
-
-// #section AD -> function -> storage
-// ACP first
-resource functionAppServicePlan 'Microsoft.Web/serverfarms@2020-12-01' = {
-  name: functionAppServicePlanName
-  location: location
-  sku: {
-    name: functionAppNameSkuName
-    tier: functionAppNameSkuTier
-  }
-}
-
-resource functionStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
-  name: functionStorageAccountName
-  location: location
-  sku: {
-    name: functionStorageAccountSkuName
-  }
-  kind: 'StorageV2'
-}
-
-resource functionApp 'Microsoft.Web/sites@2021-02-01' = {
-  name: functionAppName
-  location: location
-  kind: 'functionapp'
-  properties: {
-    serverFarmId: functionAppServicePlan.id
-    siteConfig: {
-      appSettings: [
-        {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: 'node18'
-        }
-        {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${functionStorageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${functionStorageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${functionStorageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${functionStorageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(functionAppName)
-        }
-        {
-          name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: '~4'
-        }
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: applicationInsights.properties.InstrumentationKey
-        }
-      ]
-    }
-  }
-}
-
-resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
-  name: applicationInsightsName
-  location: location
-  kind: 'web'
-  properties: {
-    Application_Type: 'web'
-    Request_Source: 'rest'
-  }
-}
-
-// notification hub
-var notificationNamespaceName = 'ntfns-${projectName}-${envName}'
-var clientName = 'ntf-${projectName}-client-${envName}'
-var driverName = 'ntf-${projectName}-driver-${envName}'
-
-param notificationHubSkuName string = 'Free'
-
-
-resource notificationNamespace 'Microsoft.NotificationHubs/namespaces@2017-04-01' = {
-  name: notificationNamespaceName
-  location: location
-  sku: {
-    name: notificationHubSkuName
-  }
-}
-
-resource notificationClientHub 'Microsoft.NotificationHubs/namespaces/notificationHubs@2017-04-01' = {
-  name: clientName
-  location: location
-  parent: notificationNamespace
-  properties: {
-  }
-}
-
-resource notificationDriverHub 'Microsoft.NotificationHubs/namespaces/notificationHubs@2017-04-01' = {
-  name: driverName
-  location: location
-  parent: notificationNamespace
-  properties: {
-  }
-}
+// // webhook
+// resource symbolicname 'Microsoft.ContainerRegistry/registries/webhooks@2023-01-01-preview' = {
+//   name:webhookName
+//   location: location
+//   tags: tags
+//   parent: acr
+//   properties: {
+//     actions: [
+//       'push'
+//     ]
+//     status: 'enabled'
+//     scope: imageName
+//     serviceUri: '${creds}/api/registry/webhook'
+//   }
+// }
 
 
