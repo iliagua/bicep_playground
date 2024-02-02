@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.22.6.54827",
-      "templateHash": "11067167051990438173"
+      "version": "0.24.24.22086",
+      "templateHash": "18319204271725260039"
     }
   },
   "parameters": {
@@ -22,22 +22,6 @@
       "metadata": {
         "description": "Location for all resources."
       }
-    },
-    "appStorageAccountSkuName": {
-      "type": "string",
-      "defaultValue": "Standard_RAGRS"
-    },
-    "functionStorageAccountSkuName": {
-      "type": "string",
-      "defaultValue": "Standard_LRS"
-    },
-    "functionAppNameSkuName": {
-      "type": "string",
-      "defaultValue": "Y1"
-    },
-    "functionAppNameSkuTier": {
-      "type": "string",
-      "defaultValue": "Dynamic"
     },
     "tags": {
       "type": "object",
@@ -56,17 +40,75 @@
     "appServicePlanName": "[format('{0}-asp-{1}', variables('projectName'), parameters('envName'))]",
     "webAppName": "[format('{0}apiwebapp{1}', variables('projectName'), parameters('envName'))]",
     "webhookName": "[format('{0}webhook{1}', variables('webAppName'), parameters('envName'))]",
-    "registryName": "[format('{0}acr{1}', variables('projectName'), parameters('envName'))]",
-    "appStorageAccountName": "[format('{0}appstorage{1}', variables('projectName'), parameters('envName'))]",
     "appServiceSkuName": "B1",
     "appServiceSkuTier": "Basic",
-    "imageName": "[format('{0}:latest', variables('projectName'))]",
-    "functionAppName": "[format('{0}funcapp{1}', variables('projectName'), parameters('envName'))]",
-    "functionAppServicePlanName": "[format('{0}-func-asp-{1}', variables('projectName'), parameters('envName'))]",
-    "functionStorageAccountName": "[format('{0}funcstorage{1}', variables('projectName'), parameters('envName'))]",
-    "applicationInsightsName": "[format('{0}appinsights{1}', variables('projectName'), parameters('envName'))]"
+    "imageName": "[format('{0}:latest', variables('projectName'))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2020-12-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "kind": "linux",
+      "properties": {
+        "reserved": true,
+        "perSiteScaling": false
+      },
+      "sku": {
+        "name": "[variables('appServiceSkuName')]",
+        "tier": "[variables('appServiceSkuTier')]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2021-02-01",
+      "name": "[format('vnet-{0}-{1}', variables('projectName'), parameters('envName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.6.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "apps",
+            "properties": {
+              "addressPrefix": "10.6.0.0/24",
+              "delegations": [
+                {
+                  "name": "Microsoft.Web/serverFarms",
+                  "properties": {
+                    "serviceName": "Microsoft.Web/serverFarms"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "privatelink",
+            "properties": {
+              "addressPrefix": "10.6.1.0/24"
+            }
+          },
+          {
+            "name": "functions",
+            "properties": {
+              "addressPrefix": "10.6.2.0/24",
+              "delegations": [
+                {
+                  "name": "Microsoft.Web/serverFarms",
+                  "properties": {
+                    "serviceName": "Microsoft.Web/serverFarms"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
     {
       "type": "Microsoft.ContainerRegistry/registries",
       "apiVersion": "2020-11-01-preview",
@@ -78,6 +120,63 @@
       "properties": {
         "adminUserEnabled": true
       }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-01-01",
+      "name": "[variables('webAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "siteConfig": {
+          "appSettings": [],
+          "acrUseManagedIdentityCreds": true,
+          "linuxFxVersion": "[format('DOCKER|{0}/{1}', reference(resourceId('Microsoft.ContainerRegistry/registries', format('{0}{1}', variables('projectName'), parameters('envName'))), '2020-11-01-preview').loginServer, variables('imageName'))]"
+        },
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "virtualNetworkSubnetId": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-{0}-{1}', variables('projectName'), parameters('envName'))), '2021-02-01').subnets[0].id]",
+        "httpsOnly": true
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', format('{0}{1}', variables('projectName'), parameters('envName')))]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-{0}-{1}', variables('projectName'), parameters('envName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries/webhooks",
+      "apiVersion": "2023-01-01-preview",
+      "name": "[format('{0}/{1}', format('{0}{1}', variables('projectName'), parameters('envName')), variables('webhookName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "actions": [
+          "push"
+        ],
+        "status": "enabled",
+        "scope": "[variables('imageName')]",
+        "serviceUri": "[format('{0}/api/registry/webhook', list(resourceId('Microsoft.Web/sites/config', split(format('{0}/publishingcredentials', variables('webAppName')), '/')[0], split(format('{0}/publishingcredentials', variables('webAppName')), '/')[1]), '2022-03-01').properties.scmUri)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', format('{0}{1}', variables('projectName'), parameters('envName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.ContainerRegistry/registries/{0}', format('{0}{1}', variables('projectName'), parameters('envName')))]",
+      "name": "[guid(resourceGroup().id, resourceId('Microsoft.Web/sites', variables('webAppName')), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7'), parameters('envName'), parameters('envName'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('webAppName')), '2021-01-01', 'full').identity.principalId]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', format('{0}{1}', variables('projectName'), parameters('envName')))]",
+        "[resourceId('Microsoft.Web/sites', variables('webAppName'))]"
+      ]
     }
   ]
 }
